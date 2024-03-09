@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace wstk_b.Models
+namespace WSTKNG.Models
 {
     public class ApplicationContext: DbContext
     {

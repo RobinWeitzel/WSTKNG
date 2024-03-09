@@ -1,9 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using System.ComponentModel.DataAnnotations;
 
-namespace wstk_b.Models
+namespace WSTKNG.Models
 {
     public class Chapter
     {

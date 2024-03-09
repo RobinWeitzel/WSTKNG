@@ -17,9 +17,9 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using wstk_b.Models;
+using WSTKNG.Models;
 
-namespace wstk_b.Services
+namespace WSTKNG.Services
 {
     public interface IEmailService
     {

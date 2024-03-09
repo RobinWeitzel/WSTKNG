@@ -1,6 +1,6 @@
 ﻿using Hangfire.Dashboard;
 
-namespace wstk_b.Services
+namespace WSTKNG.Services
 {
     public class MyAuthorizationFilter : IDashboardAuthorizationFilter
     {
