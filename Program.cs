@@ -63,7 +63,10 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
-app.UseHangfireDashboard();
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new MyAuthorizationFilter() }
+});
 
 app.UseAuthorization();
 
