@@ -5,8 +5,6 @@ WORKDIR /App
 COPY . ./
 # Restore as distinct layers
 RUN dotnet restore
-# Prep npm
-RUN npm i
 # Build and publish a release
 RUN dotnet publish -c Release -o out
 
