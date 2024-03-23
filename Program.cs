@@ -25,7 +25,7 @@ builder.Services.AddHangfire(configuration =>
        .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
        .UseSimpleAssemblyNameTypeSerializer()
        .UseRecommendedSerializerSettings()
-       .UseSQLiteStorage()
+       .UseSQLiteStorage(builder.Configuration.GetConnectionString("HangfireContextSQLite"))
         .UseConsole());
 
 builder.Services.AddHangfireConsoleExtensions();
