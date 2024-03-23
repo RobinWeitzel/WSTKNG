@@ -1,10 +1,16 @@
 using HtmlAgilityPack;
 using Cepub;
 using System;
+using Hangfire;
+using Hangfire.Server;
+using WSTKNG.Models;
+using Microsoft.EntityFrameworkCore;
+using WSTKNG.Services;
+using Hangfire.Console;
 
 public class Crawler
 {
-  private const List<string> SPECIALCHARACTERS = new List<string> { "\\", "/", "*", "?", "\"", "<", ">", "|", ":" }
+  private List<string> SPECIALCHARACTERS = new List<string> { "\\", "/", "*", "?", "\"", "<", ">", "|", ":" };
   private readonly ILogger _logger;
   public IServiceProvider _serviceProvider;
   public IEmailService _emailService;
@@ -29,7 +35,6 @@ public class Crawler
   [AutomaticRetry(Attempts = 0)]
   public async Task CheckTOC(int? id, PerformContext pc)
   {
-    using (HangfireConsoleLogger.InContext(pc))
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
     {
@@ -56,6 +61,8 @@ public class Crawler
 
           string selector = s.Template != null ? s.Template.TocSelector : s.TocSelector;
           var htmlWeb = new HtmlWeb();
+
+          htmlWeb.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 
           var toc = htmlWeb.Load(s.TocUrl);
           var entries = toc.DocumentNode.QuerySelectorAll(selector);
@@ -96,11 +103,18 @@ public class Crawler
             {
               _logger.LogInformation("Found new chapter \"" + chapter.Title + "\" for series \"" + s.Name + "\"");
 
+              string title = chapter.Title.Replace("\n", "").Trim();
+
+              foreach (string specialCharacter in SPECIALCHARACTERS)
+              {
+                title = title.Replace(specialCharacter, "");
+              }
+
               // create new chapter
-              Chapter newChapter = new Chapter
+              WSTKNG.Models.Chapter newChapter = new WSTKNG.Models.Chapter
               {
                 Published = DateTime.UtcNow,
-                Title = r.Title.Replace("\n", "").Trim(),
+                Title = title,
                 URL = Url,
                 Crawled = false,
                 Sent = false,
@@ -110,6 +124,16 @@ public class Crawler
 
               context.Chapters.Add(newChapter);
               await context.SaveChangesAsync();
+
+              if(id == null) { // this means it is a scheduled crawl and not manually triggered
+                _logger.LogInformation("Crawling chapter \"" + newChapter.Title + "\" for series \"" + newChapter.Series.Name + "\"");
+                await CrawlChapter(newChapter.ID, pc);
+
+                if(s.Active) { // we only send chapters automatically if the series is active
+                  _logger.LogInformation("Emailing chapter \"" + newChapter.Title + "\" for series \"" + newChapter.Series.Name + "\"");
+                  await EmailEpub(newChapter.ID, false, pc);
+                } 
+              }
             }
           }
         }
@@ -125,14 +149,14 @@ public class Crawler
   [AutomaticRetry(Attempts = 0)]
   public async Task CrawlChapter(int id, PerformContext pc)
   {
-    using (HangfireConsoleLogger.InContext(pc))
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
     {
       try
       {
-        Chapter chapter = await context.Chapters
+        WSTKNG.Models.Chapter chapter = await context.Chapters
             .Include(c => c.Series)
+            .ThenInclude(s => s.Template)
             .FirstOrDefaultAsync(c => c.ID == id);
 
         if (chapter == null) return;
@@ -140,18 +164,31 @@ public class Crawler
         _logger.LogInformation("Crawling chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
 
         var htmlWeb = new HtmlWeb();
+        htmlWeb.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+
         var doc = htmlWeb.Load(chapter.URL);
 
         string selector = chapter.Series.Template != null ? chapter.Series.Template.ContentSelector : chapter.Series.ContentSelector;
 
-        string content = HtmlEntity.DeEntitize(doc.DocumentNode.QuerySelector(selector).InnerHtml);
+        var ps = doc.DocumentNode.QuerySelectorAll(selector);
 
-        if (content == null && content.Length == 0)
+        if (ps == null || ps.Count == 0)
         {
           _logger.LogError("Could not find content for chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
           return;
         }
 
+        string content = "<html><body><h1>" + chapter.Title + "</h1>";
+
+        foreach (var p in ps)
+        {
+          if(!p.InnerHtml.Contains("Next Chapter") && !p.InnerHtml.Contains("Previous Chapter") && !p.InnerHtml.Contains("About") && !p.InnerHtml.Contains("<img")) {
+            content += HtmlEntity.DeEntitize(p.InnerHtml);
+          }
+        }
+
+        content += "</body></html>";
+        
         chapter.Content = content;
         chapter.Crawled = true;
         await context.SaveChangesAsync();
@@ -166,12 +203,9 @@ public class Crawler
     }
   }
 
-
-
   [AutomaticRetry(Attempts = 0)]
   public async Task CreateEpub(int seriesId, List<int> chapterIds, PerformContext pc)
   {
-    using (HangfireConsoleLogger.InContext(pc))
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
     {
@@ -187,7 +221,6 @@ public class Crawler
           return;
         }
 
-
         bool seriesEpub = chapterIds == null || chapterIds.Count == 0;
 
         if(seriesEpub) {
@@ -196,19 +229,19 @@ public class Crawler
           _logger.LogInformation("Creating epub for series \"" + series.Name + "\" with chapters " + string.Join(", ", chapterIds));
         }
         
-        if (chapterIds == null || chapterIds.Count == 0)
+        if (seriesEpub)
         {
           chapterIds = series.Chapters.Select(c => c.ID).ToList();
         }
 
         Epub epub = new Epub();
-        epub.Title = series.Title;
+        epub.Title = series.Name;
         epub.Author = series.AuthorName;
         epub.Date = series.Chapters.Where(c => c.Crawled).OrderByDescending(c => c.Published).FirstOrDefault().Published;
 
         foreach (int id in chapterIds)
         {
-          Chapter chapter = await context.Chapters
+          WSTKNG.Models.Chapter chapter = await context.Chapters
             .Include(c => c.Series)
             .FirstOrDefaultAsync(c => c.ID == id);
 
@@ -228,10 +261,20 @@ public class Crawler
           epub.AddChapter(chapter.Title, chapter.Content);
         }
 
+        if(!Directory.Exists(basePath)) {
+          Directory.CreateDirectory(basePath);
+        }
+
+        if(!Directory.Exists(Path.Combine(basePath, series.Name))) {
+          Directory.CreateDirectory(Path.Combine(basePath, series.Name));
+        }
+
         if(seriesEpub) {
-          epub.Save(Path.Combine(basePath, series.Name), "series_" + series.ID.ToString() + ".epub");
+          File.Delete(Path.Combine(basePath, series.Name, "series_" + series.ID.ToString() + ".epub"));
+          epub.Save(Path.Combine(basePath, series.Name), "series_" + series.ID.ToString());
         } else {
-          epub.Save(Path.Combine(basePath, series.Name), "chapters_" + string.Join("_", chapterIds) + ".epub");
+          File.Delete(Path.Combine(basePath, series.Name, "chapters_" + string.Join("_", chapterIds) + ".epub"));
+          epub.Save(Path.Combine(basePath, series.Name), "chapters_" + string.Join("_", chapterIds));
         }
       }
       catch (System.Exception e)
@@ -245,13 +288,12 @@ public class Crawler
   [AutomaticRetry(Attempts = 0)]
   public async Task CreateEpub(int id, PerformContext pc)
   {
-    using (HangfireConsoleLogger.InContext(pc))
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
     {
       try
       {
-        Chapter chapter = await context.Chapters
+        WSTKNG.Models.Chapter chapter = await context.Chapters
             .Include(c => c.Series)
             .FirstOrDefaultAsync(c => c.ID == id);
 
@@ -274,7 +316,6 @@ public class Crawler
   [AutomaticRetry(Attempts = 0)]
   public async Task CreateEpub(List<int> ids, PerformContext pc)
   {
-    using (HangfireConsoleLogger.InContext(pc))
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
     {
@@ -286,7 +327,7 @@ public class Crawler
           return;
         }
 
-        Chapter firstChapter = await context.Chapters
+        WSTKNG.Models.Chapter firstChapter = await context.Chapters
             .Include(c => c.Series)
             .FirstOrDefaultAsync(c => c.ID == ids[0]);
 
@@ -307,24 +348,56 @@ public class Crawler
   }
 
   [AutomaticRetry(Attempts = 0)]
-  public async Task EmailEpub(int id, bool series, PerformContext pc)
+  public async Task EmailEpub(int id, bool forSeries, PerformContext pc)
   {
-    using (HangfireConsoleLogger.InContext(pc))
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
     {
       try
       {
-        Chapter chapter = await context.Chapters
-            .Include(c => c.Series)
-            .FirstOrDefaultAsync(c => c.ID == id);
+        if(forSeries) {
+          Series series = await context.Series
+              .Include(s => s.Chapters)
+              .FirstOrDefaultAsync(s => s.ID == id);
 
-        if (chapter == null) return;
+          if (series == null) return;
 
-        _logger.LogInformation("Emailing chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
+          _logger.LogInformation("Emailing series \"" + series.Name + "\"");
 
+          await CreateEpub(series.ID, null, pc);
 
+          string path = Path.Combine(basePath, series.Name, "series_" + series.ID.ToString() + ".epub");
 
+          using (StreamReader sr = new StreamReader(path)) 
+          {
+            await _emailService.Send(series.Name + ".png", sr.BaseStream);
+          }
+        } else {
+          WSTKNG.Models.Chapter chapter = await context.Chapters
+              .Include(c => c.Series)
+              .FirstOrDefaultAsync(c => c.ID == id);
+
+          if (chapter == null) return;
+
+          _logger.LogInformation("Emailing chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
+
+          if(!chapter.Crawled) {
+            _logger.LogInformation("Chapter" + chapter.Title + " has not been crawled yet");
+            await CrawlChapter(chapter.ID, pc);
+          }
+
+          await CreateEpub(chapter.ID, pc);
+
+          string path = Path.Combine(basePath, chapter.Series.Name, "chapters_" + chapter.ID.ToString() + ".epub");
+
+          using (StreamReader sr = new StreamReader(path)) 
+          {
+            await _emailService.Send(chapter.Title + ".png", sr.BaseStream);
+          }
+
+          chapter.Sent = true;
+          await context.SaveChangesAsync();
+        }
       }
       catch (System.Exception e)
       {

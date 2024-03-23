@@ -6,7 +6,7 @@ namespace WSTKNG.Models
     {
         public int ID { get; set; }
         public string Name { get; set; }
-        public string Description { get; set; }
+        public string? Description { get; set; }
         public string TocSelector { get; set; }
         public string TitleSelector { get; set; }
         public string ContentSelector { get; set; }

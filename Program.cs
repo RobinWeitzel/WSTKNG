@@ -1,19 +1,39 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore;
+using Hangfire;
+using Hangfire.SqlServer;
 using WSTKNG.Models;
+using Hangfire.Storage.SQLite;
+using WSTKNG.Services;
+using Hangfire.Console;
+using Hangfire.Console.Extensions;
+using WSTKNG.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorPages();
+builder.Services.AddSignalR();
 
 builder.Services.AddDbContext<ApplicationContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("WSTKNGContextSQLite")));
 
-
-// ...
-
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
+
+builder.Services.AddHangfire(configuration =>
+    configuration
+       .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+       .UseSimpleAssemblyNameTypeSerializer()
+       .UseRecommendedSerializerSettings()
+       .UseSQLiteStorage()
+        .UseConsole());
+
+builder.Services.AddHangfireConsoleExtensions();
+
+builder.Services.AddHangfireServer();
+
+builder.Services.AddTransient<IEmailService, EmailService>();
+
 
 var app = builder.Build();
 
@@ -36,7 +56,6 @@ using (var scope = app.Services.CreateScope())
 
     var context = services.GetRequiredService<ApplicationContext>();
     context.Database.EnsureCreated();
-    // DbInitializer.Initialize(context);
 }
 
 app.UseHttpsRedirection();
@@ -44,8 +63,13 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+app.UseHangfireDashboard();
+
 app.UseAuthorization();
 
 app.MapRazorPages();
+app.MapHub<NotificationHub>("/notificationHub");
+
+RecurringJob.AddOrUpdate<Crawler>("crawlTOC", c => c.CheckTOC(null, null), "0 */4 * * *");
 
 app.Run();

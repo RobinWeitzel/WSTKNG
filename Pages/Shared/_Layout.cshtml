@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - WSTKNG</title>
     <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="~/css/tailwind.css"></script>
     <link rel="stylesheet" href="~/css/output.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/WSTKNG.styles.css" asp-append-version="true" />
 </head>
@@ -17,24 +17,16 @@
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="flex h-16 justify-between">
                     <div class="flex">
-                        <div class="flex flex-shrink-0 items-center">
-                            <img class="block h-8 w-auto lg:hidden"
-                                src="https://tailwindui.com/img/logos/mark.svg?color=indigo&shade=600"
-                                alt="Your Company">
-                            <img class="hidden h-8 w-auto lg:block"
-                                src="https://tailwindui.com/img/logos/mark.svg?color=indigo&shade=600"
-                                alt="Your Company">
-                        </div>
                         <div class="hidden sm:-my-px sm:ml-6 sm:flex sm:space-x-8">
                             <!-- Current: "border-indigo-500 text-gray-900", Default: "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700" -->
-                            <a href="#"
+                            <a href="/index"
                                 class="@IsCurrentPage("Series") inline-flex items-center border-b-2 px-1 pt-1 text-sm font-medium"
                                 aria-current="page">Series</a>
-                            <a href="#"
+                            <a href="/templates"
                                 class="@IsCurrentPage("Templates") inline-flex items-center border-b-2 px-1 pt-1 text-sm font-medium">Templates</a>
-                            <a href="#"
+                            <a href="/settings"
                                 class="@IsCurrentPage("Settings") inline-flex items-center border-b-2 px-1 pt-1 text-sm font-medium">Settings</a>
-                            <a href="#"
+                            <a href="/hangfire"
                                 class="@IsCurrentPage("Hangfire") inline-flex items-center border-b-2 px-1 pt-1 text-sm font-medium">Hangfire</a>
                         </div>
                     </div>
@@ -77,14 +69,14 @@
             <div class="sm:hidden" id="mobile-menu">
                 <div class="space-y-1 pb-3 pt-2">
                     <!-- Current: "border-indigo-500 bg-indigo-50 text-indigo-700", Default: "border-transparent text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800" -->
-                    <a href="#"
+                    <a href="/index"
                         class="@IsCurrentPageMobile("Series") block border-l-4 py-2 pl-3 pr-4 text-base font-medium"
                         aria-current="page">Series</a>
-                    <a href="#"
+                    <a href="/templates"
                         class="@IsCurrentPageMobile("Templates") block border-l-4 py-2 pl-3 pr-4 text-base font-medium">Templates</a>
-                    <a href="#"
+                    <a href="/settings"
                         class="@IsCurrentPageMobile("Settings") block border-l-4 py-2 pl-3 pr-4 text-base font-medium">Settings</a>
-                    <a href="#"
+                    <a href="/hangfire"
                         class="@IsCurrentPageMobile("Hangfire") block border-l-4 py-2 pl-3 pr-4 text-base font-medium">Hangfire</a>
                 </div>
             </div>
@@ -95,6 +87,56 @@
         </div>
     </div>
 
+    <div id="notification" aria-live="assertive" class="hidden group pointer-events-none fixed inset-0 items-end px-4 py-6 sm:items-start sm:p-6">
+        <div class="flex w-full flex-col items-center space-y-4 sm:items-end">
+            <div class="pointer-events-auto w-full max-w-sm overflow-hidden rounded-lg bg-white shadow-lg ring-1 ring-black ring-opacity-5">
+                <div class="p-4">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 self-center">
+                            <svg class="hidden group-[.enqueued]:block h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24"
+                                stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                            </svg>
+                            <svg class="hidden group-[.processing]:block h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24"
+                                stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+                            </svg>
+                            <svg class="hidden group-[.succeeded]:block h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24"
+                                stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <svg class="hidden group-[.failed]:block h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24"
+                                stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                            </svg>
+                        </div>
+                        <div class="ml-3 w-0 flex-1 pt-0.5">
+                            <p id="notification-title" class="text-sm font-medium text-gray-900">Successfully saved!</p>
+                            <p id="notification-text" class="mt-1 text-sm text-gray-500">Anyone with a link can now view this file.</p>
+                        </div>
+                        <div class="ml-4 flex flex-shrink-0">
+                            <button type="button"
+                                class="inline-flex rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                                <span class="sr-only">Close</span>
+                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path
+                                        d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="~/js/signalr/dist/browser/signalr.js" asp-append-version="true"></script>
+    <script src="~/js/localStorageHelper.js" asp-append-version="true"></script>
+    <script src="~/js/notification.js" asp-append-version="true"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
 
     @await RenderSectionAsync("Scripts", required: false)
@@ -103,18 +145,26 @@
 </html>
 
 @functions {
-    public string IsCurrentPage(string title) {
-        if(ViewData["Title"] != null && ViewData["Title"].Equals(title)) {
+    public string IsCurrentPage(string title)
+    {
+        if (ViewData["Title"] != null && ((string)ViewData["Title"]).StartsWith(title))
+        {
             return "border-indigo-500 text-gray-900";
-        } else {
+        }
+        else
+        {
             return "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700";
         }
     }
 
-     public string IsCurrentPageMobile(string title) {
-        if(ViewData["Title"] != null && ViewData["Title"].Equals(title)) {
+    public string IsCurrentPageMobile(string title)
+    {
+        if (ViewData["Title"] != null && ((string)ViewData["Title"]).StartsWith(title))
+        {
             return "border-indigo-500 bg-indigo-50 text-indigo-700";
-        } else {
+        }
+        else
+        {
             return "border-transparent text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800";
         }
     }
