@@ -33,10 +33,7 @@ public class IndexModel : PageModel
 
         var monitor = JobStorage.Current.GetMonitoringApi();
 
-        IDictionary<DateTime, long> succeeded = monitor.SucceededByDatesCount();
-        IDictionary<DateTime, long> failed = monitor.FailedByDatesCount();
-
-        Succeeded = succeeded.OrderByDescending(s => s.Key).First().Value;
-        Failed = failed.OrderByDescending(s => s.Key).First().Value;
+        Failed = monitor.FailedCount();
+        Succeeded = monitor.SucceededListCount();
     }
 }
