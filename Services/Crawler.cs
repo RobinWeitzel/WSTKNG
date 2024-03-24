@@ -180,13 +180,6 @@ public class Crawler
           return;
         }
 
-        // skip if chapter only visible to patreon viewers.
-        if (ps.Where(p => p.InnerHtml.Contains("Patrons get early access to chapters!")).Count() > 0)
-        {
-          _logger.LogInformation("Chapter is behind patreon paywall");
-          return;
-        }
-
         string content = "<h1>" + chapter.Title + "</h1>";
 
         foreach (var p in ps)
@@ -195,6 +188,11 @@ public class Crawler
           {
             content += p.OuterHtml.Replace("&nbsp;", "");
           }
+        }
+
+        if(content.Length < 50) {
+          _logger.LogWarning("Not enought content found for chapter");
+          return;
         }
 
         chapter.Content = content;
