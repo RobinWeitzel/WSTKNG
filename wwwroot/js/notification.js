@@ -29,7 +29,7 @@ connection.on("JobUpdate", function (jobs) {
   if (jobs.length > 0) {
     selectClass(notification, jobs[0].state.toLowerCase());
     notificationTitle.innerText = "Job " + jobs[0].state;
-    notificationText.innerText = "Crawler method: " + jobs[0].name;
+    notificationText.innerText = "Active method: " + jobs[0].name + " (" + job.length - 1 + " jobs in queue)";
 
     notification.classList.add("flex");
     notification.classList.remove("hidden");
