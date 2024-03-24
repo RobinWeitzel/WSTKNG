@@ -26,10 +26,11 @@ const dismissNotifications = () => {
 }
 
 connection.on("JobUpdate", function (jobs) {
+  console.log(jobs);
   if (jobs.length > 0) {
     selectClass(notification, jobs[0].state.toLowerCase());
     notificationTitle.innerText = "Job " + jobs[0].state;
-    notificationText.innerText = "Active method: " + jobs[0].name + " (" + job.length - 1 + " jobs in queue)";
+    notificationText.innerText = "Active method: " + jobs[0].name + " (" + (jobs.length - 1) + " jobs in queue)";
 
     notification.classList.add("flex");
     notification.classList.remove("hidden");

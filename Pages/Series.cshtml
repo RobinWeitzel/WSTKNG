@@ -63,43 +63,51 @@
                         <th scope="col"
                             class="hidden px-3 py-3.5 text-left text-sm font-semibold text-gray-900 lg:table-cell">
                             Published</th>
-                        <th scope="col"
-                            class="hidden px-3 py-3.5 text-left text-sm font-semibold text-gray-900 sm:table-cell">URL
-                        </th>
-                        <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Crawled / Sent
-                        </th>
-                        <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-0">
-                            <span class="sr-only">Send to kindle</span>
-                        </th>
+                        <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Crawled</th>
+                        <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Emailed</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 bg-white">
-                    @foreach (var chapter in Model.Series.Chapters.OrderByDescending(c => c.Published).ThenByDescending(c
+                    @foreach (var chapter in Model.Series.Chapters.OrderByDescending(c =>
+                    c.Published).ThenByDescending(c
                     => c.Title))
                     {
                         <tr>
                             <td
-                                class="w-full max-w-0 py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:w-auto sm:max-w-none sm:pl-0">
-                                @chapter.Title
+                                class="w-full max-w-0 py-4 pl-4 pr-3 text-sm font-medium text-indigo-600 hover:text-indigo-900 sm:w-auto sm:max-w-none sm:pl-0">
+                                <a href="@chapter.URL">@chapter.Title</a>
                                 <dl class="font-normal lg:hidden">
                                     <dt class="sr-only">Published</dt>
                                     <dd class="mt-1 truncate text-gray-700">@chapter.Published.ToLocalTime()</dd>
-                                    <dt class="sr-only sm:hidden">URL</dt>
-                                    <dd class="mt-1 truncate text-indigo-600 hover:text-indigo-900 sm:hidden">
-                                        <a href="@chapter.URL">Link</a>
-                                    </dd>
                                 </dl>
                             </td>
                             <td class="hidden px-3 py-4 text-sm text-gray-500 lg:table-cell">
                                 @chapter.Published.ToLocalTime()</td>
-                            <td class="hidden px-3 py-4 text-sm text-indigo-600 hover:text-indigo-900 sm:table-cell">
-                                <a href="@chapter.URL">Link</a>
+                            <td class="px-3 py-4 text-sm text-gray-500">
+                                <div class="flex items-center">
+                                    <span>@(chapter.Crawled ? "Yes" : "No") </span>
+                                    <button onclick="crawlChapter(@chapter.ID)" type="button"
+                                        class="ml-1 text-indigo-600 hover:text-indigo-900">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                            stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M9 8.25H7.5a2.25 2.25 0 0 0-2.25 2.25v9a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H15M9 12l3 3m0 0 3-3m-3 3V2.25" />
+                                        </svg>
+                                    </button>
+                                </div>
                             </td>
-                            <td class="px-3 py-4 text-sm text-gray-500">@(chapter.Crawled ? "Yes" : "No") / @(chapter.Sent ?
-                            "Yes" : "No")</td>
-                            <td class="py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
-                                <button onclick="sendChapter(@chapter.ID)" type="button"
-                                    class="text-indigo-600 hover:text-indigo-900">Send to Kindle</button>
+                            <td class="px-3 py-4 text-sm text-gray-500">
+                                <div class="flex items-center">
+                                    <span>@(chapter.Sent ? "Yes" : "No")</span>
+                                    <button onclick="sendChapter(@chapter.ID)" type="button"
+                                        class="ml-1 text-indigo-600 hover:text-indigo-900">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                            stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+                                        </svg>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     }
@@ -147,6 +155,24 @@
                     storage.addId(data.jobId);
                 });
         }
+
+        const crawlChapter = (id) => {
+            const formData = new FormData();
+            formData.append("id", id);
+
+            fetch(`/series/${id}?handler=crawl`, {
+                method: "POST",
+                body: formData,
+                headers: {
+                    "RequestVerificationToken": document.querySelector('input[name="__RequestVerificationToken"]').value,
+                    "Content-type": "application/json;"
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    storage.addId(data.jobId);
+                });
+        }   
 
         const sendChapter = (id) => {
             const formData = new FormData();

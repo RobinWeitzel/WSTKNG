@@ -834,6 +834,10 @@ select {
   margin-bottom: 0.75rem;
 }
 
+.ml-1 {
+  margin-left: 0.25rem;
+}
+
 .ml-16 {
   margin-left: 4rem;
 }
@@ -1410,10 +1414,6 @@ select {
   text-align: center;
 }
 
-.text-right {
-  text-align: right;
-}
-
 .text-2xl {
   font-size: 1.5rem;
   line-height: 2rem;
@@ -1802,10 +1802,6 @@ select {
     display: flex;
   }
 
-  .sm\:table-cell {
-    display: table-cell;
-  }
-
   .sm\:hidden {
     display: none;
   }
@@ -1884,10 +1880,6 @@ select {
 
   .sm\:pl-0 {
     padding-left: 0px;
-  }
-
-  .sm\:pr-0 {
-    padding-right: 0px;
   }
 
   .sm\:pt-6 {

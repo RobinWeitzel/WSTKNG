@@ -42,6 +42,12 @@ public class SeriesModel : PageModel
         return new JsonResult(new {jobId});
     }
 
+    public ActionResult OnPostCrawl(int id) {
+        string jobId = BackgroundJob.Enqueue<Crawler>(c => c.CrawlChapter(id, null));
+
+        return new JsonResult(new {jobId});
+    }
+
     public ActionResult OnPostChapter(int id) {
         string jobId = BackgroundJob.Enqueue<Crawler>(c => c.EmailEpub(id, false, null));
 
