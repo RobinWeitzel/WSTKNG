@@ -1,4 +1,3 @@
-using HtmlAgilityPack;
 using Cepub;
 using System;
 using Hangfire;
@@ -7,6 +6,9 @@ using WSTKNG.Models;
 using Microsoft.EntityFrameworkCore;
 using WSTKNG.Services;
 using Hangfire.Console;
+using AngleSharp.Html.Parser;
+using AngleSharp.Html.Dom;
+using AngleSharp.Dom;
 
 public class Crawler
 {
@@ -30,6 +32,20 @@ public class Crawler
     public string Title { get; set; }
 
     public string Url { get; set; }
+  }
+
+  private async Task<IHtmlDocument> GetPage(string url) {
+    HttpClient httpClient = new HttpClient();
+
+    httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
+
+    HttpResponseMessage request = await httpClient.GetAsync(url);
+    Stream response = await request.Content.ReadAsStreamAsync();
+
+    HtmlParser parser = new HtmlParser();
+    IHtmlDocument document = parser.ParseDocument(response);
+
+    return document;
   }
 
   [AutomaticRetry(Attempts = 0)]
@@ -60,19 +76,17 @@ public class Crawler
           _logger.LogInformation("Checking for update for series \"" + s.Name + "\"");
 
           string selector = s.Template != null ? s.Template.TocSelector : s.TocSelector;
-          var htmlWeb = new HtmlWeb();
 
-          htmlWeb.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+          IHtmlDocument document = await this.GetPage(s.TocUrl);
 
-          var toc = htmlWeb.Load(s.TocUrl);
-          var entries = toc.DocumentNode.QuerySelectorAll(selector);
+          var entries = document.QuerySelectorAll(selector);
 
           List<TOCResult> chapters = new List<TOCResult>();
 
           foreach (var entry in entries)
           {
-            string href = HtmlEntity.DeEntitize(entry.Attributes["href"].Value);
-            string text = HtmlEntity.DeEntitize(entry.InnerText);
+            string href = entry.Attributes["href"].Value;
+            string text = entry.Text();
 
             if (href != null && href.Length > 0 && text.Trim().Length > 0)
             {
@@ -161,16 +175,14 @@ public class Crawler
 
         _logger.LogInformation("Crawling chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
 
-        var htmlWeb = new HtmlWeb();
-        htmlWeb.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
-
-        var doc = htmlWeb.Load(chapter.URL);
+      
+        var document = await GetPage(chapter.URL);
 
         string selector = chapter.Series.Template != null ? chapter.Series.Template.ContentSelector : chapter.Series.ContentSelector;
 
-        var ps = doc.DocumentNode.QuerySelectorAll(selector);
+        var ps = document.QuerySelectorAll(selector);
 
-        if (ps == null || ps.Count == 0)
+        if (ps == null || ps.Count() == 0)
         {
           _logger.LogError("Could not find content for chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
           return;
@@ -181,7 +193,7 @@ public class Crawler
         foreach (var p in ps)
         {
           if(!p.InnerHtml.Contains("Next Chapter") && !p.InnerHtml.Contains("Previous Chapter") && !p.InnerHtml.Contains("About") && !p.InnerHtml.Contains("<img")) {
-            content += HtmlEntity.DeEntitize(p.InnerHtml);
+            content += p.InnerHtml;
           }
         }
 
