@@ -74,5 +74,7 @@ app.MapRazorPages();
 app.MapHub<NotificationHub>("/notificationHub");
 
 RecurringJob.AddOrUpdate<Crawler>("crawlTOC", c => c.CheckTOC(null, null), "0 */4 * * *");
+RecurringJob.AddOrUpdate<Crawler>("crawlChapters", c => c.ScheduledCrawl(null), "15 */4 * * *");
+RecurringJob.AddOrUpdate<Crawler>("sendEmails", c => c.ScheduledEmail(null), "30 */4 * * *");
 
 app.Run();
