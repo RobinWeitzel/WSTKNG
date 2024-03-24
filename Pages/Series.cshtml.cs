@@ -49,14 +49,21 @@ public class SeriesModel : PageModel
     }
 
     public ActionResult OnPostChapter(int id) {
-        string jobId = BackgroundJob.Enqueue<Crawler>(c => c.EmailEpub(id, false, null));
+        string jobId = BackgroundJob.Enqueue<Crawler>(c => c.EmailEpub(new List<int> {id}, null));
 
         return new JsonResult(new {jobId});
     }
 
-    public ActionResult OnPostBook(int id) {
-        string jobId = BackgroundJob.Enqueue<Crawler>(c => c.EmailEpub(id, true, null));
+    public ActionResult OnPostSeries(int id) {
+        var series = _context.Series.Include(s => s.Chapters).Where(s => s.ID == id).FirstOrDefault();
+
+        if(series == null) {
+            return new JsonResult(new {});
+        }
+
+        string jobId = BackgroundJob.Enqueue<Crawler>(c => c.EmailEpub(series.Chapters.Select(c => c.ID).ToList(), null));
 
         return new JsonResult(new {jobId});
+        
     }
 }

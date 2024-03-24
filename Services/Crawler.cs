@@ -34,7 +34,8 @@ public class Crawler
     public string Url { get; set; }
   }
 
-  private async Task<IHtmlDocument> GetPage(string url) {
+  private async Task<IHtmlDocument> GetPage(string url)
+  {
     HttpClient httpClient = new HttpClient();
 
     httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
@@ -113,9 +114,9 @@ public class Crawler
             }
 
             // check whether chapter exists in DB
-            if (!context.Chapters.Where(c => c.URL.Equals(Url)).Any())
+            if (!context.Chapters.Where(c => c.URL.Equals(Url) && c.SeriesID == s.ID).Any())
             {
-              string title = chapter.Title.Replace("\n", "").Trim();
+              string title = chapter.Title.Replace("\n", "").Replace("&", "and").Trim();
 
               foreach (string specialCharacter in SPECIALCHARACTERS)
               {
@@ -138,14 +139,6 @@ public class Crawler
 
               context.Chapters.Add(newChapter);
               await context.SaveChangesAsync();
-
-              if(id == null) { // this means it is a scheduled crawl and not manually triggered
-                await CrawlChapter(newChapter.ID, pc);
-
-                if(s.Active) { // we only send chapters automatically if the series is active
-                  await EmailEpub(newChapter.ID, false, pc);
-                } 
-              }
             }
           }
         }
@@ -175,7 +168,6 @@ public class Crawler
 
         _logger.LogInformation("Crawling chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
 
-      
         var document = await GetPage(chapter.URL);
 
         string selector = chapter.Series.Template != null ? chapter.Series.Template.ContentSelector : chapter.Series.ContentSelector;
@@ -188,17 +180,23 @@ public class Crawler
           return;
         }
 
-        string content = "<html><body><h1>" + chapter.Title + "</h1>";
+        // skip if chapter only visible to patreon viewers.
+        if (ps.Where(p => p.InnerHtml.Contains("Patrons get early access to chapters!")).Count() > 0)
+        {
+          _logger.LogInformation("Chapter is behind patreon paywall");
+          return;
+        }
+
+        string content = "<h1>" + chapter.Title + "</h1>";
 
         foreach (var p in ps)
         {
-          if(!p.InnerHtml.Contains("Next Chapter") && !p.InnerHtml.Contains("Previous Chapter") && !p.InnerHtml.Contains("About") && !p.InnerHtml.Contains("<img")) {
-            content += p.InnerHtml;
+          if (!p.InnerHtml.Contains("Next Chapter") && !p.InnerHtml.Contains("Previous Chapter") && !p.InnerHtml.Contains("About") && !p.InnerHtml.Contains("<img"))
+          {
+            content += p.OuterHtml.Replace("&nbsp;", "");
           }
         }
 
-        content += "</body></html>";
-        
         chapter.Content = content;
         chapter.Crawled = true;
         await context.SaveChangesAsync();
@@ -214,54 +212,49 @@ public class Crawler
   }
 
   [AutomaticRetry(Attempts = 0)]
-  public async Task CreateEpub(int seriesId, List<int> chapterIds, PerformContext pc)
+  public async Task CrawlChapters(List<int> ids, PerformContext pc)
+  {
+    using (IServiceScope scope = _serviceProvider.CreateScope())
+    using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
+    {
+      foreach(int id in ids) {
+        await CrawlChapter(id, pc);
+      }
+    }
+  }
+
+  [AutomaticRetry(Attempts = 0)]
+  public async Task CreateEpub(List<int> chapterIds, PerformContext pc)
   {
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
     {
       try
       {
-        Series series = await context.Series
-            .Include(s => s.Chapters)
-            .FirstOrDefaultAsync(s => s.ID == seriesId);
+        List<WSTKNG.Models.Chapter> chapters = await context.Chapters
+            .Include(c => c.Series)
+            .Where(c => chapterIds.Contains(c.ID))
+            .ToListAsync();
 
-        if (series == null)
+        if (chapters.Count() == 0)
         {
-          _logger.LogError("Series with id " + seriesId.ToString() + " does not exist");
+          _logger.LogError("No chapters to crawl");
           return;
         }
 
-        bool seriesEpub = chapterIds == null || chapterIds.Count == 0;
+        var series = chapters.First().Series;
 
-        if(seriesEpub) {
-          _logger.LogInformation("Creating epub for series \"" + series.Name + "\"");
-        } else {
-          _logger.LogInformation("Creating epub for series \"" + series.Name + "\" with chapters " + string.Join(", ", chapterIds));
-        }
-        
-        if (seriesEpub)
-        {
-          chapterIds = series.Chapters.Select(c => c.ID).ToList();
-        }
+        _logger.LogInformation("Creating epub for series \"" + series.Name + "\" with chapters " + string.Join(", ", chapterIds));
 
         Epub epub = new Epub();
         epub.Title = series.Name;
         epub.Author = series.AuthorName;
-        epub.Date = series.Chapters.Where(c => c.Crawled).OrderByDescending(c => c.Published).FirstOrDefault().Published;
+        epub.Date = chapters.OrderByDescending(c => c.Published).FirstOrDefault().Published;
 
-        foreach (int id in chapterIds)
+        foreach (var chapter in chapters)
         {
-          WSTKNG.Models.Chapter chapter = await context.Chapters
-            .Include(c => c.Series)
-            .FirstOrDefaultAsync(c => c.ID == id);
-
-          if (chapter == null)
+          if (!chapter.Crawled)
           {
-            _logger.LogError("Chapter with id " + id.ToString() + " does not exist");
-            return;
-          }
-
-          if(!chapter.Crawled) {
             _logger.LogInformation("Chapter" + chapter.Title + " has not been crawled yet");
             continue;
           }
@@ -271,21 +264,22 @@ public class Crawler
           epub.AddChapter(chapter.Title, chapter.Content);
         }
 
-        if(!Directory.Exists(basePath)) {
+        if (!Directory.Exists(basePath))
+        {
           Directory.CreateDirectory(basePath);
         }
 
-        if(!Directory.Exists(Path.Combine(basePath, series.Name))) {
+        if (!Directory.Exists(Path.Combine(basePath, series.Name)))
+        {
           Directory.CreateDirectory(Path.Combine(basePath, series.Name));
         }
 
-        if(seriesEpub) {
-          File.Delete(Path.Combine(basePath, series.Name, "series_" + series.ID.ToString() + ".epub"));
-          epub.Save(Path.Combine(basePath, series.Name), "series_" + series.ID.ToString());
-        } else {
-          File.Delete(Path.Combine(basePath, series.Name, "chapters_" + string.Join("_", chapterIds) + ".epub"));
-          epub.Save(Path.Combine(basePath, series.Name), "chapters_" + string.Join("_", chapterIds));
+        if (File.Exists(Path.Combine(basePath, series.Name, "job_" + pc.BackgroundJob.Id.ToString() + ".epub")))
+        {
+          File.Delete(Path.Combine(basePath, series.Name, "job_" + pc.BackgroundJob.Id.ToString() + ".epub"));
         }
+
+        epub.Save(Path.Combine(basePath, series.Name), "job_" + pc.BackgroundJob.Id.ToString());
       }
       catch (System.Exception e)
       {
@@ -303,17 +297,7 @@ public class Crawler
     {
       try
       {
-        WSTKNG.Models.Chapter chapter = await context.Chapters
-            .Include(c => c.Series)
-            .FirstOrDefaultAsync(c => c.ID == id);
-
-        if (chapter == null)
-        {
-          _logger.LogError("Chapter with id " + id.ToString() + " does not exist");
-          return;
-        }
-
-        CreateEpub(chapter.Series.ID, new List<int> { id }, pc);
+        CreateEpub(new List<int> { id }, pc);
       }
       catch (System.Exception e)
       {
@@ -324,94 +308,86 @@ public class Crawler
   }
 
   [AutomaticRetry(Attempts = 0)]
-  public async Task CreateEpub(List<int> ids, PerformContext pc)
+  public async Task EmailEpub(List<int> chapterIds, PerformContext pc)
   {
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
     {
       try
       {
-        if (ids == null || ids.Count == 0)
+        var chapters = context.Chapters.Include(c => c.Series).Where(c => chapterIds.Contains(c.ID)).ToList();
+
+        if (chapters.Count() == 0)
         {
-          _logger.LogError("No chapters to create epub for");
+          _logger.LogInformation("No chapters to email");
           return;
         }
 
-        WSTKNG.Models.Chapter firstChapter = await context.Chapters
-            .Include(c => c.Series)
-            .FirstOrDefaultAsync(c => c.ID == ids[0]);
+        _logger.LogInformation("Emailing chapter for series \"" + chapters.First().Series.Name + "\"");
 
-        if (firstChapter == null)
+        await CrawlChapters(chapters.Where(c => !c.Crawled).Select(c => c.ID).ToList(), pc);
+        
+        await CreateEpub(chapterIds, pc);
+
+        string path = Path.Combine(basePath, chapters.First().Series.Name, "job_" + pc.BackgroundJob.Id.ToString() + ".epub");
+
+        using (StreamReader sr = new StreamReader(path))
         {
-          _logger.LogError("First chapter does not exist");
-          return;
+          await _emailService.Send(chapters.First().Series.Name + "_job_" + pc.BackgroundJob.Id.ToString() + ".png", sr.BaseStream);
         }
 
-        CreateEpub(firstChapter.Series.ID, ids, pc);
-      }
-      catch (System.Exception e)
-      {
-        _logger.LogError("Error creating epub");
-        _logger.LogError(e.Message);
-      }
-    }
-  }
-
-  [AutomaticRetry(Attempts = 0)]
-  public async Task EmailEpub(int id, bool forSeries, PerformContext pc)
-  {
-    using (IServiceScope scope = _serviceProvider.CreateScope())
-    using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
-    {
-      try
-      {
-        if(forSeries) {
-          Series series = await context.Series
-              .Include(s => s.Chapters)
-              .FirstOrDefaultAsync(s => s.ID == id);
-
-          if (series == null) return;
-
-          _logger.LogInformation("Emailing series \"" + series.Name + "\"");
-
-          await CreateEpub(series.ID, null, pc);
-
-          string path = Path.Combine(basePath, series.Name, "series_" + series.ID.ToString() + ".epub");
-
-          using (StreamReader sr = new StreamReader(path)) 
-          {
-            await _emailService.Send(series.Name + ".png", sr.BaseStream);
-          }
-        } else {
-          WSTKNG.Models.Chapter chapter = await context.Chapters
-              .Include(c => c.Series)
-              .FirstOrDefaultAsync(c => c.ID == id);
-
-          if (chapter == null) return;
-
-          _logger.LogInformation("Emailing chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
-
-          if(!chapter.Crawled) {
-            _logger.LogInformation("Chapter" + chapter.Title + " has not been crawled yet");
-            await CrawlChapter(chapter.ID, pc);
-          }
-
-          await CreateEpub(chapter.ID, pc);
-
-          string path = Path.Combine(basePath, chapter.Series.Name, "chapters_" + chapter.ID.ToString() + ".epub");
-
-          using (StreamReader sr = new StreamReader(path)) 
-          {
-            await _emailService.Send(chapter.Title + ".png", sr.BaseStream);
-          }
-
+        foreach (var chapter in context.Chapters.Where(c => chapterIds.Contains(c.ID)))
+        {
           chapter.Sent = true;
-          await context.SaveChangesAsync();
         }
+
+        await context.SaveChangesAsync();
       }
       catch (System.Exception e)
       {
         _logger.LogError("Error emailing chapter");
+        _logger.LogError(e.Message);
+      }
+    }
+  }
+
+  [AutomaticRetry(Attempts = 0)]
+  public async void ScheduledCrawl(PerformContext pc)
+  {
+    using (IServiceScope scope = _serviceProvider.CreateScope())
+    using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
+    {
+      try
+      {
+        foreach (Series series in context.Series.Include(s => s.Chapters))
+        {
+          await CrawlChapters(series.Chapters.Where(c => !c.Crawled).Select(c => c.ID).ToList(), pc);
+        }
+      }
+      catch (System.Exception e)
+      {
+        _logger.LogError("Error crawling chapters");
+        _logger.LogError(e.Message);
+      }
+    }
+  }
+
+  [AutomaticRetry(Attempts = 0)]
+  public async void ScheduledEmail(PerformContext pc)
+  {
+    using (IServiceScope scope = _serviceProvider.CreateScope())
+    using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
+    {
+      try
+      {
+        foreach (Series series in context.Series.Include(s => s.Chapters).Where(s => s.Active))
+        {
+          await EmailEpub(series.Chapters.Where(c => !c.Sent).Select(c => c.ID).ToList(), pc);
+        }
+      }
+      catch (System.Exception e)
+      {
+        _logger.LogError("Error crawling chapters");
         _logger.LogError(e.Message);
       }
     }
