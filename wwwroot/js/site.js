@@ -7,3 +7,19 @@ const toggleMenu = () => {
 
   menu.classList.toggle('hidden');
 }
+
+const showDialog = (id, title) => {
+  const dialog = document.getElementById('dialog');
+  const dialogInput = document.getElementById('modal-input');
+  const dialogTitle = document.getElementById('modal-title');
+
+  dialogInput.value = id;
+  dialogTitle.innerText = "Delete " + title;
+
+  dialog.classList.remove('hidden');
+}
+
+const hideDialog = () => {
+  const dialog = document.getElementById('dialog');
+  dialog.classList.add('hidden');
+}

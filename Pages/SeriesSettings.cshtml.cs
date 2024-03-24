@@ -47,4 +47,14 @@ public class SeriesSettingsModel : PageModel
 
         return RedirectToPage("Series", new { id = series.ID });
     }
+
+     public async Task<IActionResult> OnPostDelete(int id) {
+        var series = await _context.Series.FindAsync(id);
+
+        _context.Series.Remove(series);
+
+        await _context.SaveChangesAsync();
+
+        return RedirectToPage("Index");
+    }
 }

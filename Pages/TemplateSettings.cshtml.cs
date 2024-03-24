@@ -41,4 +41,14 @@ public class TemplateSettingsModel : PageModel
 
         return RedirectToPage("Templates");
     }
+
+    public async Task<IActionResult> OnPostDelete(int id) {
+        var template = await _context.Templates.FindAsync(id);
+
+        _context.Templates.Remove(template);
+
+        await _context.SaveChangesAsync();
+
+        return RedirectToPage("Templates");
+    }
 }
