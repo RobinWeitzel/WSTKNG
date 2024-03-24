@@ -19,6 +19,12 @@ const selectClass = (element, className) => {
   element.classList.add(className);
 };
 
+const dismissNotifications = () => {
+  storage.setIds([]);
+  notification.classList.add("hidden");
+  notification.classList.remove("flex");
+}
+
 connection.on("JobUpdate", function (jobs) {
   if (jobs.length > 0) {
     selectClass(notification, jobs[0].state.toLowerCase());
