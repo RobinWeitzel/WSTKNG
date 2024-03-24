@@ -101,14 +101,14 @@ public class Crawler
             // check whether chapter exists in DB
             if (!context.Chapters.Where(c => c.URL.Equals(Url)).Any())
             {
-              _logger.LogInformation("Found new chapter \"" + chapter.Title + "\" for series \"" + s.Name + "\"");
-
               string title = chapter.Title.Replace("\n", "").Trim();
 
               foreach (string specialCharacter in SPECIALCHARACTERS)
               {
                 title = title.Replace(specialCharacter, "");
               }
+
+              _logger.LogInformation("Found new chapter \"" + title + "\" for series \"" + s.Name + "\"");
 
               // create new chapter
               WSTKNG.Models.Chapter newChapter = new WSTKNG.Models.Chapter
@@ -126,11 +126,9 @@ public class Crawler
               await context.SaveChangesAsync();
 
               if(id == null) { // this means it is a scheduled crawl and not manually triggered
-                _logger.LogInformation("Crawling chapter \"" + newChapter.Title + "\" for series \"" + newChapter.Series.Name + "\"");
                 await CrawlChapter(newChapter.ID, pc);
 
                 if(s.Active) { // we only send chapters automatically if the series is active
-                  _logger.LogInformation("Emailing chapter \"" + newChapter.Title + "\" for series \"" + newChapter.Series.Name + "\"");
                   await EmailEpub(newChapter.ID, false, pc);
                 } 
               }
