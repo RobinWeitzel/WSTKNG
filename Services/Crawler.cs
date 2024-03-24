@@ -352,7 +352,7 @@ public class Crawler
   }
 
   [AutomaticRetry(Attempts = 0)]
-  public async void ScheduledCrawl(PerformContext pc)
+  public async Task ScheduledCrawl(PerformContext pc)
   {
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
@@ -373,7 +373,7 @@ public class Crawler
   }
 
   [AutomaticRetry(Attempts = 0)]
-  public async void ScheduledEmail(PerformContext pc)
+  public async Task ScheduledEmail(PerformContext pc)
   {
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
