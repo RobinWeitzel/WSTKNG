@@ -45,9 +45,9 @@ namespace WSTKNG.Services
             var email = new MimeMessage();
             email.Sender = MailboxAddress.Parse(setting.EmailFrom);
             email.To.Add(MailboxAddress.Parse(setting.KindleEmail));
-            email.Subject = "convert";
+            email.Subject = "epub";
 
-            var builder = new BodyBuilder { HtmlBody = "convert" };
+            var builder = new BodyBuilder { HtmlBody = "epub" };
             builder.Attachments.Add(filename, file);
 
             email.Body = builder.ToMessageBody();

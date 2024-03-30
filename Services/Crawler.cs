@@ -357,7 +357,7 @@ public class Crawler
 
         using (StreamReader sr = new StreamReader(path))
         {
-          await _emailService.Send(Path.GetFileName(path).Replace(".epub", ".png"), sr.BaseStream);
+          await _emailService.Send(Path.GetFileName(path), sr.BaseStream);
         }
 
         foreach (var chapter in context.Chapters.Where(c => chapterIds.Contains(c.ID)))
