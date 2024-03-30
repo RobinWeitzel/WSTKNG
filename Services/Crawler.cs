@@ -222,7 +222,7 @@ public class Crawler
   }
 
   [AutomaticRetry(Attempts = 0)]
-  public async Task CreateEpub(List<int> chapterIds, PerformContext pc)
+  public async Task<string> CreateEpub(List<int> chapterIds, PerformContext pc)
   {
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
@@ -232,12 +232,13 @@ public class Crawler
         List<WSTKNG.Models.Chapter> chapters = await context.Chapters
             .Include(c => c.Series)
             .Where(c => chapterIds.Contains(c.ID))
+            .OrderBy(c => c.Published)
             .ToListAsync();
 
         if (chapters.Count() == 0)
         {
           _logger.LogError("No chapters to crawl");
-          return;
+          return null;
         }
 
         var series = chapters.First().Series;
@@ -247,7 +248,7 @@ public class Crawler
         Epub epub = new Epub();
         epub.Title = series.Name;
         epub.Author = series.AuthorName;
-        epub.Date = chapters.OrderByDescending(c => c.Published).FirstOrDefault().Published;
+        epub.Date = chapters.FirstOrDefault().Published;
 
         foreach (var chapter in chapters)
         {
@@ -262,6 +263,19 @@ public class Crawler
           epub.AddChapter(chapter.Title, chapter.Content);
         }
 
+        string fileName = "";
+
+        if(chapters.Count() == 1) {
+          fileName = chapters.First().Title;
+        } else {
+          var allChapters = await context.Chapters.AsNoTracking().Where(c => c.SeriesID == series.ID).OrderBy(c => c.Published).Select(c => c.ID).ToListAsync();
+
+          int start = allChapters.IndexOf(chapters.First().ID) + 1;
+          int end = allChapters.IndexOf(chapters.Last().ID) + 1;
+
+          fileName = series.Name + " - Chapters " + start + " to " + end;
+        }
+
         if (!Directory.Exists(basePath))
         {
           Directory.CreateDirectory(basePath);
@@ -272,35 +286,44 @@ public class Crawler
           Directory.CreateDirectory(Path.Combine(basePath, series.Name));
         }
 
-        if (File.Exists(Path.Combine(basePath, series.Name, "job_" + pc.BackgroundJob.Id.ToString() + ".epub")))
+        if (!Directory.Exists(Path.Combine(basePath, series.Name, "job_" + pc.BackgroundJob.Id.ToString())))
         {
-          File.Delete(Path.Combine(basePath, series.Name, "job_" + pc.BackgroundJob.Id.ToString() + ".epub"));
+          Directory.CreateDirectory(Path.Combine(basePath, series.Name, "job_" + pc.BackgroundJob.Id.ToString()));
         }
 
-        epub.Save(Path.Combine(basePath, series.Name), "job_" + pc.BackgroundJob.Id.ToString());
+        if (File.Exists(Path.Combine(basePath, series.Name, "job_" + pc.BackgroundJob.Id.ToString(), fileName + ".epub")))
+        {
+          File.Delete(Path.Combine(basePath, series.Name, "job_" + pc.BackgroundJob.Id.ToString(), fileName + ".epub"));
+        }
+
+        epub.Save(Path.Combine(basePath, series.Name, "job_" + pc.BackgroundJob.Id.ToString()), fileName);
+
+        return Path.Combine(basePath, series.Name, "job_" + pc.BackgroundJob.Id.ToString(), fileName + ".epub");
       }
       catch (System.Exception e)
       {
         _logger.LogError("Error creating epub");
         _logger.LogError(e.Message);
+        return null;
       }
     }
   }
 
   [AutomaticRetry(Attempts = 0)]
-  public async Task CreateEpub(int id, PerformContext pc)
+  public async Task<string> CreateEpub(int id, PerformContext pc)
   {
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
     {
       try
       {
-        CreateEpub(new List<int> { id }, pc);
+        return await CreateEpub(new List<int> { id }, pc);
       }
       catch (System.Exception e)
       {
         _logger.LogError("Error creating epub");
         _logger.LogError(e.Message);
+        return null;
       }
     }
   }
@@ -325,13 +348,16 @@ public class Crawler
 
         await CrawlChapters(chapters.Where(c => !c.Crawled).Select(c => c.ID).ToList(), pc);
         
-        await CreateEpub(chapterIds, pc);
+        string path = await CreateEpub(chapterIds, pc);
 
-        string path = Path.Combine(basePath, chapters.First().Series.Name, "job_" + pc.BackgroundJob.Id.ToString() + ".epub");
+        if(path == null) {
+          _logger.LogError("Error creating epub");
+          return;
+        }
 
         using (StreamReader sr = new StreamReader(path))
         {
-          await _emailService.Send(chapters.First().Series.Name + "_job_" + pc.BackgroundJob.Id.ToString() + ".png", sr.BaseStream);
+          await _emailService.Send(Path.GetFileName(path).Replace(".epub", ".png"), sr.BaseStream);
         }
 
         foreach (var chapter in context.Chapters.Where(c => chapterIds.Contains(c.ID)))
