@@ -29,7 +29,9 @@ public class IndexModel : PageModel
                 .AsNoTracking()
                 .ToListAsync();
 
-        ChapterCount = _context.Chapters.Count();
+        ChapterCount = _context.Chapters
+        .Where(c => c.Published > DateTime.Now.AddDays(-7))    
+        .Count();
 
         var monitor = JobStorage.Current.GetMonitoringApi();
 
