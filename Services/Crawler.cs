@@ -180,11 +180,27 @@ public class Crawler
           return;
         }
 
+        bool isRoyalRoad = false;
+        string className = "";
+
+        if(chapter.Series.Template != null && chapter.Series.Template.Name == "RoyalRoad") {
+          isRoyalRoad = true;
+          var styles = document.QuerySelectorAll("style");
+
+          foreach (var style in styles)
+          {
+            if (style.InnerHtml.Contains("display: none;"))
+            {
+              className = style.InnerHtml.Split("{")[0].Replace(".", "").Trim();
+            }
+          }
+        }
+
         string content = "<h1>" + chapter.Title + "</h1>";
 
         foreach (var p in ps)
         {
-          if (!p.InnerHtml.Contains("Next Chapter") && !p.InnerHtml.Contains("Previous Chapter") && !p.InnerHtml.Contains("About") && !p.InnerHtml.Contains("<img"))
+          if (!p.InnerHtml.Contains("Next Chapter") && !p.InnerHtml.Contains("Previous Chapter") && !p.InnerHtml.Contains("About") && !p.InnerHtml.Contains("<img") && !p.InnerHtml.Contains("<img") && (!isRoyalRoad || !p.ClassList.Contains(className)))
           {
             content += p.OuterHtml.Replace("&nbsp;", "");
           }
