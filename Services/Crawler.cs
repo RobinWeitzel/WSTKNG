@@ -200,7 +200,7 @@ public class Crawler
 
         foreach (var p in ps)
         {
-          if (!p.InnerHtml.Contains("Next Chapter") && !p.InnerHtml.Contains("Previous Chapter") && !p.InnerHtml.Contains("About") && !p.InnerHtml.Contains("<img") && !p.InnerHtml.Contains("<img") && (!isRoyalRoad || !p.ClassList.Contains(className)))
+          if (!p.InnerHtml.Contains("Next Chapter") && !p.InnerHtml.Contains("Previous Chapter") && !p.InnerHtml.Contains("<img") && !p.InnerHtml.Contains("<img") && (!isRoyalRoad || !p.ClassList.Contains(className)))
           {
             content += p.OuterHtml.Replace("&nbsp;", "");
           }
