@@ -26,7 +26,6 @@ const dismissNotifications = () => {
 }
 
 connection.on("JobUpdate", function (jobs) {
-  console.log(jobs);
   if (jobs.length > 0) {
     selectClass(notification, jobs[0].state.toLowerCase());
     notificationTitle.innerText = "Job " + jobs[0].state;
