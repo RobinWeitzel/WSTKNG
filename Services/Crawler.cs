@@ -9,6 +9,7 @@ using Hangfire.Console;
 using AngleSharp.Html.Parser;
 using AngleSharp.Html.Dom;
 using AngleSharp.Dom;
+using System.Net;
 
 public class Crawler
 {
@@ -34,14 +35,17 @@ public class Crawler
     public string Url { get; set; }
   }
 
-  private async Task<IHtmlDocument> GetPage(string url, string headerName, string headerValue)
+  private async Task<IHtmlDocument> GetPage(string url, string CookieName, string CookieValue)
   {
-    HttpClient httpClient = new HttpClient();
-
-    httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
-    if(headerName != null && headerValue != null) {
-      httpClient.DefaultRequestHeaders.Add(headerName, headerValue);
+    HttpClientHandler handler = new HttpClientHandler();
+    if (CookieName != null && CookieValue != null && !CookieName.Equals(""))
+    {
+      handler.CookieContainer = new CookieContainer();
+      Cookie cookie = new Cookie(CookieName, CookieValue) { Domain = new Uri(url).Host };
+      handler.CookieContainer.Add(cookie);
     }
+    HttpClient httpClient = new HttpClient(handler);
+    httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
 
     HttpResponseMessage request = await httpClient.GetAsync(url);
     Stream response = await request.Content.ReadAsStreamAsync();
@@ -57,10 +61,11 @@ public class Crawler
     * @param url The url to post to
     * @param formName The name of the form field
     * @param formValue The value of the form field
-    * @param headerName The name of the header to return 
-    * @return The value of the header
+    * @param CookieName The name of the header to return 
+    * @return The header
   */
-  private async Task<string> PostFormHeader(string url, string formName, string formValue, string headerName) {
+  private async Task<IEnumerable<string>> GetCookies(string url, string formName, string formValue, string CookieName)
+  {
     HttpClient httpClient = new HttpClient();
 
     httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
@@ -69,7 +74,7 @@ public class Crawler
       { formName, formValue }
     }));
 
-   return request.Headers.First(h => h.Key.StartsWith(headerName)).Value.First();
+    return request.Headers.GetValues("Set-Cookie");
   }
 
   [AutomaticRetry(Attempts = 0)]
@@ -192,11 +197,32 @@ public class Crawler
 
         _logger.LogInformation("Crawling chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
 
+        if (chapter.Password != null && chapter.Password != "" && chapter.Series.Template.Name.Equals("Wordpress"))
+        {
+          string baseUrl = "https://" + new Uri(chapter.Series.TocUrl).Host + "/wp-login.php?action=postpass&wpe-login=true";
+          var cookies = await GetCookies(baseUrl, "post_password", chapter.Password, "wp-postpass_");
+          foreach (var cookie in cookies)
+          {
+            string name = cookie.Split("=")[0];
+            string value = cookie.Split("=")[1].Split(";")[0];
+
+            if (name.StartsWith("wp-postpass_"))
+            {
+              chapter.CookieName = name;
+              chapter.CookieValue = value;
+              break;
+            }
+          }
+          await context.SaveChangesAsync();
+        }
         IHtmlDocument document = null;
-        
-        if(chapter.HeaderName != null && chapter.HeaderValue != null) {
-          document = await GetPage(chapter.URL, chapter.HeaderName, chapter.HeaderValue);
-        } else {
+
+        if (chapter.CookieName != null && chapter.CookieValue != null)
+        {
+          document = await GetPage(chapter.URL, chapter.CookieName, chapter.CookieValue);
+        }
+        else
+        {
           document = await GetPage(chapter.URL, null, null);
         }
 
@@ -217,7 +243,8 @@ public class Crawler
         bool isRoyalRoad = false;
         string className = "";
 
-        if(chapter.Series.Template != null && chapter.Series.Template.Name == "RoyalRoad") {
+        if (chapter.Series.Template != null && chapter.Series.Template.Name == "RoyalRoad")
+        {
           isRoyalRoad = true;
           var styles = document.QuerySelectorAll("style");
 
@@ -240,7 +267,8 @@ public class Crawler
           }
         }
 
-        if(content.Length < 50) {
+        if (content.Length < 50)
+        {
           _logger.LogWarning("Not enought content found for chapter");
           return;
         }
@@ -265,7 +293,8 @@ public class Crawler
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
     {
-      foreach(int id in ids) {
+      foreach (int id in ids)
+      {
         await CrawlChapter(id, pc);
       }
     }
@@ -315,9 +344,12 @@ public class Crawler
 
         string fileName = "";
 
-        if(chapters.Count() == 1) {
+        if (chapters.Count() == 1)
+        {
           fileName = chapters.First().Title;
-        } else {
+        }
+        else
+        {
           var allChapters = await context.Chapters.AsNoTracking().Where(c => c.SeriesID == series.ID).OrderBy(c => c.Published).Select(c => c.ID).ToListAsync();
 
           int start = allChapters.IndexOf(chapters.First().ID) + 1;
@@ -397,10 +429,11 @@ public class Crawler
         _logger.LogInformation("Emailing chapter for series \"" + chapters.First().Series.Name + "\"");
 
         await CrawlChapters(chapters.Where(c => !c.Crawled).Select(c => c.ID).ToList(), pc);
-        
+
         string path = await CreateEpub(chapterIds, pc);
 
-        if(path == null) {
+        if (path == null)
+        {
           _logger.LogError("Error creating epub");
           return;
         }
