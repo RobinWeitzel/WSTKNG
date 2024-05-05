@@ -34,11 +34,14 @@ public class Crawler
     public string Url { get; set; }
   }
 
-  private async Task<IHtmlDocument> GetPage(string url)
+  private async Task<IHtmlDocument> GetPage(string url, string headerName, string headerValue)
   {
     HttpClient httpClient = new HttpClient();
 
     httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
+    if(headerName != null && headerValue != null) {
+      httpClient.DefaultRequestHeaders.Add(headerName, headerValue);
+    }
 
     HttpResponseMessage request = await httpClient.GetAsync(url);
     Stream response = await request.Content.ReadAsStreamAsync();
@@ -169,6 +172,10 @@ public class Crawler
         _logger.LogInformation("Crawling chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
 
         var document = await GetPage(chapter.URL);
+
+        // https://wanderinginn.com/wp-login.php?action=postpass&wpe-login=true post
+        // name='post_password'
+        // wp-postpass_1066c31e854ee525207c99d9fecb9fc0 (last part is dynamic)
 
         string selector = chapter.Series.Template != null ? chapter.Series.Template.ContentSelector : chapter.Series.ContentSelector;
 
