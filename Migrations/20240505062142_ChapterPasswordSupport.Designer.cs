@@ -11,7 +11,7 @@ using WSTKNG.Models;
 namespace WSTKNG.Migrations
 {
     [DbContext(typeof(ApplicationContext))]
-    [Migration("20240505051714_ChapterPasswordSupport")]
+    [Migration("20240505062142_ChapterPasswordSupport")]
     partial class ChapterPasswordSupport
     {
         /// <inheritdoc />
@@ -30,14 +30,14 @@ namespace WSTKNG.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CookieName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CookieValue")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("Crawled")
                         .HasColumnType("INTEGER");
-
-                    b.Property<string>("HeaderName")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("HeaderValue")
-                        .HasColumnType("TEXT");
 
                     b.Property<string>("Password")
                         .HasColumnType("TEXT");

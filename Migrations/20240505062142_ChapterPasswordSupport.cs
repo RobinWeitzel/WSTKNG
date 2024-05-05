@@ -11,13 +11,13 @@ namespace WSTKNG.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<string>(
-                name: "HeaderName",
+                name: "CookieName",
                 table: "Chapters",
                 type: "TEXT",
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
-                name: "HeaderValue",
+                name: "CookieValue",
                 table: "Chapters",
                 type: "TEXT",
                 nullable: true);
@@ -33,11 +33,11 @@ namespace WSTKNG.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "HeaderName",
+                name: "CookieName",
                 table: "Chapters");
 
             migrationBuilder.DropColumn(
-                name: "HeaderValue",
+                name: "CookieValue",
                 table: "Chapters");
 
             migrationBuilder.DropColumn(

@@ -27,14 +27,14 @@ namespace WSTKNG.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CookieName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CookieValue")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("Crawled")
                         .HasColumnType("INTEGER");
-
-                    b.Property<string>("HeaderName")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("HeaderValue")
-                        .HasColumnType("TEXT");
 
                     b.Property<string>("Password")
                         .HasColumnType("TEXT");
