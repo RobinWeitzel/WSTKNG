@@ -12,6 +12,9 @@ namespace WSTKNG.Models
         public bool Sent { get; set; }
         public DateTime Published { get; set; }
         public int SeriesID { get; set; }
+        public string Password { get; set; }
+        public string HeaderName { get; set; }
+        public string HeaderValue { get; set; }
 
         public Series Series { get; set; }
     }
