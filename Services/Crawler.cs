@@ -52,7 +52,28 @@ public class Crawler
     return document;
   }
 
+  /**
+    * Posts a form to a url and returns the value of a header
+    * @param url The url to post to
+    * @param formName The name of the form field
+    * @param formValue The value of the form field
+    * @param headerName The name of the header to return 
+    * @return The value of the header
+  */
+  private async Task<string> PostFormHeader(string url, string formName, string formValue, string headerName) {
+    HttpClient httpClient = new HttpClient();
+
+    httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
+
+    HttpResponseMessage request = await httpClient.PostAsync(url, new FormUrlEncodedContent(new Dictionary<string, string> {
+      { formName, formValue }
+    }));
+
+   return request.Headers.First(h => h.Key.StartsWith(headerName)).Value.First();
+  }
+
   [AutomaticRetry(Attempts = 0)]
+
   public async Task CheckTOC(int? id, PerformContext pc)
   {
     using (IServiceScope scope = _serviceProvider.CreateScope())
@@ -81,7 +102,7 @@ public class Crawler
 
           string selector = s.Template != null ? s.Template.TocSelector : s.TocSelector;
 
-          IHtmlDocument document = await this.GetPage(s.TocUrl);
+          IHtmlDocument document = await this.GetPage(s.TocUrl, null, null);
 
           var entries = document.QuerySelectorAll(selector);
 
@@ -171,7 +192,13 @@ public class Crawler
 
         _logger.LogInformation("Crawling chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
 
-        var document = await GetPage(chapter.URL);
+        IHtmlDocument document = null;
+        
+        if(chapter.HeaderName != null && chapter.HeaderValue != null) {
+          document = await GetPage(chapter.URL, chapter.HeaderName, chapter.HeaderValue);
+        } else {
+          document = await GetPage(chapter.URL, null, null);
+        }
 
         // https://wanderinginn.com/wp-login.php?action=postpass&wpe-login=true post
         // name='post_password'
