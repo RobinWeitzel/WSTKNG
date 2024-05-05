@@ -2,6 +2,7 @@ using Hangfire;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using WSTKNG.Models;
 
 namespace WSTKNG.Pages;
@@ -33,6 +34,15 @@ public class ChapterModel : PageModel
     }
 
     public ActionResult OnPostCrawl(int id, int chapterId) {
+        Request.Headers.TryGetValue("ChapterPassword", out var password);
+
+        if(!password.ToString().Equals("")) {
+            var chapter = _context.Chapters.Find(chapterId);
+            if(chapter != null) {
+                chapter.Password = password.ToString();
+                _context.SaveChanges();
+            }
+        }
         string jobId = BackgroundJob.Enqueue<Crawler>(c => c.CrawlChapter(chapterId, null));
 
         return new JsonResult(new {jobId});

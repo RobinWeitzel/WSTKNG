@@ -24,7 +24,8 @@
             </svg>
             <h3 class="mt-2 text-sm font-semibold text-gray-900">No content</h3>
             <p class="mt-1 text-sm text-gray-500">Chapter has not yet been crawled.</p>
-            <div class="mt-6">
+            <div class="mt-6 flex items-center justify-center gap-x-6">
+                <input value="@Model.Chapter.Password" id="chapter_password" type="text" placeholder="Password" class="inline-flex rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6">
                 <button onclick="crawlChapter()" type="button"
                     class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
                     <svg class="-ml-0.5 mr-1.5 h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -49,7 +50,8 @@
                 body: formData,
                 headers: {
                     "RequestVerificationToken": document.querySelector('input[name="__RequestVerificationToken"]').value,
-                    "Content-type": "application/json;"
+                    "Content-type": "application/x-www-form-urlencoded;charset=UTF-8",
+                    "ChapterPassword": document.getElementById("chapter_password").value
                 }
             })
                 .then(response => response.json())
