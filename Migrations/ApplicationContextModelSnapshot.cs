@@ -31,15 +31,12 @@ namespace WSTKNG.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("HeaderName")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("HeaderValue")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Password")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("Published")

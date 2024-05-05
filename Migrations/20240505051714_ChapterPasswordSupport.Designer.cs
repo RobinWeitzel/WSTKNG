@@ -11,7 +11,7 @@ using WSTKNG.Models;
 namespace WSTKNG.Migrations
 {
     [DbContext(typeof(ApplicationContext))]
-    [Migration("20240505045610_ChapterPasswordSupport")]
+    [Migration("20240505051714_ChapterPasswordSupport")]
     partial class ChapterPasswordSupport
     {
         /// <inheritdoc />
@@ -34,15 +34,12 @@ namespace WSTKNG.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("HeaderName")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("HeaderValue")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Password")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("Published")

@@ -14,22 +14,19 @@ namespace WSTKNG.Migrations
                 name: "HeaderName",
                 table: "Chapters",
                 type: "TEXT",
-                nullable: false,
-                defaultValue: "");
+                nullable: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "HeaderValue",
                 table: "Chapters",
                 type: "TEXT",
-                nullable: false,
-                defaultValue: "");
+                nullable: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "Password",
                 table: "Chapters",
                 type: "TEXT",
-                nullable: false,
-                defaultValue: "");
+                nullable: true);
         }
 
         /// <inheritdoc />
