@@ -267,7 +267,7 @@ public class Crawler
           }
         }
 
-        if (content.Length < 50)
+        if (content.Length < 100)
         {
           _logger.LogWarning("Not enought content found for chapter");
           return;
