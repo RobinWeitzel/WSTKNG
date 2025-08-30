@@ -126,15 +126,25 @@
                 <div class="space-y-4">
                     <div>
                         <label for="startChapter" class="block text-sm font-medium text-gray-700">Start Chapter</label>
-                        <input type="number" id="startChapter" min="1" max="@Model.Series.Chapters.Count" value="1" onchange="updateChapterTitles()"
-                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <div class="flex gap-2 mt-1">
+                            <input type="number" id="startChapter" min="1" max="@Model.Series.Chapters.Count" value="1" onchange="updateChapterTitles()"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            <button type="button" onclick="setToOldestUnsent()" title="Set to oldest unsent chapter"
+                                class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                                </svg>
+                            </button>
+                        </div>
                         <p id="startChapterTitle" class="mt-1 text-xs text-gray-600"></p>
+                        <p id="startChapterStatus" class="mt-1 text-xs"></p>
                     </div>
                     <div>
                         <label for="endChapter" class="block text-sm font-medium text-gray-700">End Chapter</label>
                         <input type="number" id="endChapter" min="1" max="@Model.Series.Chapters.Count" value="@Model.Series.Chapters.Count" onchange="updateChapterTitles()"
                             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <p id="endChapterTitle" class="mt-1 text-xs text-gray-600"></p>
+                        <p id="endChapterStatus" class="mt-1 text-xs"></p>
                     </div>
                     <div class="bg-gray-50 p-3 rounded-md">
                         <p class="text-sm font-medium text-gray-700">Selection Summary:</p>
@@ -165,7 +175,8 @@
                 .ThenBy(c => c.Title)
                 .Select((c, index) => new { 
                     Number = index + 1, 
-                    Title = c.Title 
+                    Title = c.Title,
+                    Sent = c.Sent
                 })
                 .ToArray()
         ));
@@ -190,22 +201,34 @@
             // Update title displays
             const startTitleElement = document.getElementById('startChapterTitle');
             const endTitleElement = document.getElementById('endChapterTitle');
+            const startStatusElement = document.getElementById('startChapterStatus');
+            const endStatusElement = document.getElementById('endChapterStatus');
             const summaryElement = document.getElementById('selectionSummary');
             
             if (startChapterData) {
                 startTitleElement.textContent = `${startChapter}. ${startChapterData.Title}`;
                 startTitleElement.className = 'mt-1 text-xs text-gray-600';
+                
+                // Show sent status
+                startStatusElement.textContent = startChapterData.Sent ? 'Already sent' : 'Not sent yet';
+                startStatusElement.className = startChapterData.Sent ? 'mt-1 text-xs text-green-600' : 'mt-1 text-xs text-blue-600';
             } else {
                 startTitleElement.textContent = 'Chapter not found';
                 startTitleElement.className = 'mt-1 text-xs text-red-600';
+                startStatusElement.textContent = '';
             }
             
             if (endChapterData) {
                 endTitleElement.textContent = `${endChapter}. ${endChapterData.Title}`;
                 endTitleElement.className = 'mt-1 text-xs text-gray-600';
+                
+                // Show sent status
+                endStatusElement.textContent = endChapterData.Sent ? 'Already sent' : 'Not sent yet';
+                endStatusElement.className = endChapterData.Sent ? 'mt-1 text-xs text-green-600' : 'mt-1 text-xs text-blue-600';
             } else {
                 endTitleElement.textContent = 'Chapter not found';
                 endTitleElement.className = 'mt-1 text-xs text-red-600';
+                endStatusElement.textContent = '';
             }
             
             // Update selection summary
@@ -217,6 +240,19 @@
                 summaryElement.textContent = 'Invalid selection';
                 summaryElement.className = 'text-sm text-red-600 mt-1';
             }
+        }
+
+        const setToOldestUnsent = () => {
+            // Find the first (oldest) chapter that hasn't been sent yet
+            const oldestUnsentChapter = chapters.find(c => !c.Sent);
+            
+            if (oldestUnsentChapter) {
+                document.getElementById('startChapter').value = oldestUnsentChapter.Number;
+            } else {
+                // All chapters have been sent, set to newest chapter
+                document.getElementById('startChapter').value = chapters.length;
+            }
+            updateChapterTitles(); // Update the display
         }
 
         const sendChapterRange = () => {
