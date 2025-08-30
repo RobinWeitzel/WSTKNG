@@ -68,11 +68,33 @@ public class SeriesModel : PageModel
     }
 
     public ActionResult OnPostRange(int id, int startChapter, int endChapter) {
-        var series = _context.Series.Include(s => s.Chapters).Where(s => s.ID == id).FirstOrDefault();
+        try 
+        {
+            // Input validation
+            if (id <= 0)
+            {
+                _logger.LogWarning("Invalid series ID provided: {SeriesId}", id);
+                return new JsonResult(new { error = "Invalid series ID" });
+            }
 
-        if(series == null) {
-            return new JsonResult(new {});
-        }
+            if (startChapter <= 0 || endChapter <= 0)
+            {
+                _logger.LogWarning("Invalid chapter range provided: start={StartChapter}, end={EndChapter}", startChapter, endChapter);
+                return new JsonResult(new { error = "Chapter numbers must be greater than 0" });
+            }
+
+            if (startChapter > endChapter)
+            {
+                _logger.LogWarning("Invalid chapter range: start chapter {StartChapter} is greater than end chapter {EndChapter}", startChapter, endChapter);
+                return new JsonResult(new { error = "Start chapter must be less than or equal to end chapter" });
+            }
+
+            var series = _context.Series.Include(s => s.Chapters).Where(s => s.ID == id).FirstOrDefault();
+
+            if(series == null) {
+                _logger.LogWarning("Series not found with ID: {SeriesId}", id);
+                return new JsonResult(new { error = "Series not found" });
+            }
 
         // Get chapters ordered by their position in the series (oldest to newest)
         var orderedChapters = series.Chapters
@@ -80,20 +102,32 @@ public class SeriesModel : PageModel
             .ThenBy(c => c.Title)
             .ToList();
 
-        // Validate chapter range
-        if (startChapter < 1 || endChapter < 1 || startChapter > orderedChapters.Count || endChapter > orderedChapters.Count || startChapter > endChapter) {
-            return new JsonResult(new { error = "Invalid chapter range" });
+            // Additional validation for chapter range
+            if (startChapter > orderedChapters.Count || endChapter > orderedChapters.Count) {
+                _logger.LogWarning("Chapter range exceeds available chapters. Requested: {StartChapter}-{EndChapter}, Available: {TotalChapters}", 
+                    startChapter, endChapter, orderedChapters.Count);
+                return new JsonResult(new { error = $"Invalid chapter range. Series has {orderedChapters.Count} chapters." });
+            }
+
+            // Get the chapters in the specified range (convert to 0-based indexing)
+            var selectedChapters = orderedChapters
+                .Skip(startChapter - 1)
+                .Take(endChapter - startChapter + 1)
+                .Select(c => c.ID)
+                .ToList();
+
+            _logger.LogInformation("Enqueuing chapter range {StartChapter}-{EndChapter} for series {SeriesId} - {SeriesName}", 
+                startChapter, endChapter, series.ID, series.Name);
+
+            string jobId = BackgroundJob.Enqueue<Crawler>(c => c.EmailEpub(selectedChapters, null));
+
+            return new JsonResult(new {jobId});
         }
-
-        // Get the chapters in the specified range (convert to 0-based indexing)
-        var selectedChapters = orderedChapters
-            .Skip(startChapter - 1)
-            .Take(endChapter - startChapter + 1)
-            .Select(c => c.ID)
-            .ToList();
-
-        string jobId = BackgroundJob.Enqueue<Crawler>(c => c.EmailEpub(selectedChapters, null));
-
-        return new JsonResult(new {jobId});
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Error processing chapter range request for series {SeriesId}, chapters {StartChapter}-{EndChapter}", 
+                id, startChapter, endChapter);
+            return new JsonResult(new { error = "An error occurred while processing your request" });
+        }
     }
 }

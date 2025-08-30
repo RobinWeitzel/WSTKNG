@@ -39,25 +39,56 @@ public class Crawler
 
   private async Task<IHtmlDocument> GetPage(string url, string CookieName, string CookieValue)
   {
-    using var httpClient = _httpClientFactory.CreateClient();
-    
-    if (CookieName != null && CookieValue != null && !CookieName.Equals(""))
+    if (string.IsNullOrWhiteSpace(url))
     {
-      var cookie = new Cookie(CookieName, CookieValue) { Domain = new Uri(url).Host };
-      // Note: For cookie support with HttpClientFactory, consider using a named client with configured handler
-      // For now, we'll use headers for simple cases
-      httpClient.DefaultRequestHeaders.Add("Cookie", $"{CookieName}={CookieValue}");
+      _logger.LogError("GetPage called with null or empty URL");
+      throw new ArgumentException("URL cannot be null or empty", nameof(url));
     }
-    
-    httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
 
-    using var request = await httpClient.GetAsync(url);
-    using var response = await request.Content.ReadAsStreamAsync();
+    try
+    {
+      using var httpClient = _httpClientFactory.CreateClient();
+      
+      // Set timeout to avoid hanging requests
+      httpClient.Timeout = TimeSpan.FromSeconds(30);
+      
+      if (CookieName != null && CookieValue != null && !CookieName.Equals(""))
+      {
+        var cookie = new Cookie(CookieName, CookieValue) { Domain = new Uri(url).Host };
+        // Note: For cookie support with HttpClientFactory, consider using a named client with configured handler
+        // For now, we'll use headers for simple cases
+        httpClient.DefaultRequestHeaders.Add("Cookie", $"{CookieName}={CookieValue}");
+      }
+      
+      httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
 
-    var parser = new HtmlParser();
-    var document = parser.ParseDocument(response);
+      using var request = await httpClient.GetAsync(url);
+      
+      // Ensure successful status code
+      request.EnsureSuccessStatusCode();
+      
+      using var response = await request.Content.ReadAsStreamAsync();
 
-    return document;
+      var parser = new HtmlParser();
+      var document = parser.ParseDocument(response);
+
+      return document;
+    }
+    catch (HttpRequestException ex)
+    {
+      _logger.LogError(ex, "HTTP request failed for URL: {Url}", url);
+      throw new InvalidOperationException($"Failed to fetch page from {url}", ex);
+    }
+    catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
+    {
+      _logger.LogError(ex, "Request timeout for URL: {Url}", url);
+      throw new TimeoutException($"Request to {url} timed out", ex);
+    }
+    catch (UriFormatException ex)
+    {
+      _logger.LogError(ex, "Invalid URL format: {Url}", url);
+      throw new ArgumentException($"Invalid URL format: {url}", nameof(url), ex);
+    }
   }
 
   /**
@@ -109,7 +140,7 @@ public class Crawler
 
         foreach (Series s in Series)
         {
-          _logger.LogInformation("Checking for update for series \"" + s.Name + "\"");
+          _logger.LogInformation("Checking for updates for series {SeriesId} - {SeriesName}", s.ID, s.Name);
 
           string selector = s.Template != null ? s.Template.TocSelector : s.TocSelector;
 
@@ -157,7 +188,7 @@ public class Crawler
                 title = title.Replace(specialCharacter, "");
               }
 
-              _logger.LogInformation("Found new chapter \"" + title + "\" for series \"" + s.Name + "\"");
+              _logger.LogInformation("Found new chapter {ChapterTitle} for series {SeriesId} - {SeriesName}", title, s.ID, s.Name);
 
               // create new chapter
               WSTKNG.Models.Chapter newChapter = new WSTKNG.Models.Chapter
@@ -177,10 +208,9 @@ public class Crawler
           }
         }
       }
-      catch (System.Exception e)
+      catch (Exception e)
       {
-        _logger.LogError("Error checking TOC");
-        _logger.LogError(e.Message);
+        _logger.LogError(e, "Error occurred while checking TOC for series {SeriesId}", id);
       }
     }
   }
@@ -191,16 +221,17 @@ public class Crawler
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
     {
+      WSTKNG.Models.Chapter? chapter = null;
       try
       {
-        WSTKNG.Models.Chapter chapter = await context.Chapters
+        chapter = await context.Chapters
             .Include(c => c.Series)
             .ThenInclude(s => s.Template)
             .FirstOrDefaultAsync(c => c.ID == id);
 
         if (chapter == null) return;
 
-        _logger.LogInformation("Crawling chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
+        _logger.LogInformation("Starting to crawl chapter {ChapterId} - {ChapterTitle} for series {SeriesName}", chapter.ID, chapter.Title, chapter.Series.Name);
 
         if (!string.IsNullOrEmpty(chapter.Password) && chapter.Series.Template.Name.Equals("Wordpress"))
         {
@@ -241,7 +272,7 @@ public class Crawler
 
         if (ps == null || !ps.Any())
         {
-          _logger.LogError("Could not find content for chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
+          _logger.LogError("Could not find content for chapter {ChapterId} - {ChapterTitle} for series {SeriesName}", chapter.ID, chapter.Title, chapter.Series.Name);
           return;
         }
 
@@ -274,7 +305,7 @@ public class Crawler
 
         if (content.Length < 100)
         {
-          _logger.LogWarning("Not enought content found for chapter");
+          _logger.LogWarning("Insufficient content found for chapter {ChapterId} - {ChapterTitle}. Content length: {ContentLength}", chapter.ID, chapter.Title, content?.Length ?? 0);
           return;
         }
 
@@ -282,12 +313,13 @@ public class Crawler
         chapter.Crawled = true;
         await context.SaveChangesAsync();
 
-        _logger.LogInformation("Crawled chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
+        _logger.LogInformation("Successfully crawled chapter {ChapterId} - {ChapterTitle} for series {SeriesName}. Content length: {ContentLength}", 
+          chapter.ID, chapter.Title, chapter.Series.Name, content?.Length ?? 0);
       }
-      catch (System.Exception e)
+      catch (Exception e)
       {
-        _logger.LogError("Error getting content of chapter");
-        _logger.LogError(e.Message);
+        _logger.LogError(e, "Failed to crawl chapter {ChapterId} - {ChapterTitle} for series {SeriesName}", 
+          id, chapter?.Title ?? "Unknown", chapter?.Series?.Name ?? "Unknown");
       }
     }
   }
@@ -311,6 +343,7 @@ public class Crawler
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
     {
+      WSTKNG.Models.Series? series = null;
       try
       {
         List<WSTKNG.Models.Chapter> chapters = await context.Chapters
@@ -325,9 +358,10 @@ public class Crawler
           return null;
         }
 
-        var series = chapters.First().Series;
+        series = chapters.First().Series;
 
-        _logger.LogInformation("Creating epub for series \"" + series.Name + "\" with chapters " + string.Join(", ", chapterIds));
+        _logger.LogInformation("Creating epub for series {SeriesId} - {SeriesName} with {ChapterCount} chapters: {ChapterIds}", 
+          series.ID, series.Name, chapterIds.Count, chapterIds);
 
         Epub epub = new Epub();
         epub.Title = series.Name;
@@ -387,10 +421,10 @@ public class Crawler
 
         return Path.Combine(basePath, series.Name, "job_" + pc.BackgroundJob.Id.ToString(), fileName + ".epub");
       }
-      catch (System.Exception e)
+      catch (Exception e)
       {
-        _logger.LogError("Error creating epub");
-        _logger.LogError(e.Message);
+        _logger.LogError(e, "Failed to create epub for series {SeriesId} - {SeriesName} with chapters {ChapterIds}", 
+          series?.ID ?? 0, series?.Name ?? "Unknown", chapterIds);
         return null;
       }
     }
@@ -406,10 +440,9 @@ public class Crawler
       {
         return await CreateEpub(new List<int> { id }, pc);
       }
-      catch (System.Exception e)
+      catch (Exception e)
       {
-        _logger.LogError("Error creating epub");
-        _logger.LogError(e.Message);
+        _logger.LogError(e, "Failed to create epub for chapter {ChapterId}", id);
         return null;
       }
     }
@@ -421,6 +454,7 @@ public class Crawler
     using (IServiceScope scope = _serviceProvider.CreateScope())
     using (ApplicationContext context = scope.ServiceProvider.GetRequiredService<ApplicationContext>())
     {
+      WSTKNG.Models.Series? series = null;
       try
       {
         var chapters = context.Chapters.Include(c => c.Series).Where(c => chapterIds.Contains(c.ID)).ToList();
@@ -431,7 +465,9 @@ public class Crawler
           return;
         }
 
-        _logger.LogInformation("Emailing chapter for series \"" + chapters.First().Series.Name + "\"");
+        series = chapters.First().Series;
+        _logger.LogInformation("Emailing {ChapterCount} chapters for series {SeriesId} - {SeriesName}", 
+          chapterIds.Count, series.ID, series.Name);
 
         await CrawlChapters(chapters.Where(c => !c.Crawled).Select(c => c.ID).ToList(), pc);
 
@@ -452,10 +488,10 @@ public class Crawler
 
         await context.SaveChangesAsync();
       }
-      catch (System.Exception e)
+      catch (Exception e)
       {
-        _logger.LogError("Error emailing chapter");
-        _logger.LogError(e.Message);
+        _logger.LogError(e, "Failed to email chapters {ChapterIds} for series {SeriesId} - {SeriesName}", 
+          chapterIds, series?.ID ?? 0, series?.Name ?? "Unknown");
       }
     }
   }
@@ -473,10 +509,9 @@ public class Crawler
           await CrawlChapters(series.Chapters.Where(c => !c.Crawled).Select(c => c.ID).ToList(), pc);
         }
       }
-      catch (System.Exception e)
+      catch (Exception e)
       {
-        _logger.LogError("Error crawling chapters");
-        _logger.LogError(e.Message);
+        _logger.LogError(e, "Failed during scheduled crawl of chapters");
       }
     }
   }
@@ -494,10 +529,9 @@ public class Crawler
           await EmailEpub(series.Chapters.Where(c => !c.Sent).Select(c => c.ID).ToList(), pc);
         }
       }
-      catch (System.Exception e)
+      catch (Exception e)
       {
-        _logger.LogError("Error crawling chapters");
-        _logger.LogError(e.Message);
+        _logger.LogError(e, "Failed during scheduled email sending");
       }
     }
   }

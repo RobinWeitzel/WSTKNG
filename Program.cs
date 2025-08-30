@@ -8,6 +8,7 @@ using WSTKNG.Services;
 using Hangfire.Console;
 using Hangfire.Console.Extensions;
 using WSTKNG.Hubs;
+using WSTKNG.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,9 +40,11 @@ builder.Services.AddTransient<IEmailService, EmailService>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+// Add global exception handling middleware
+app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
+
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error");
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
