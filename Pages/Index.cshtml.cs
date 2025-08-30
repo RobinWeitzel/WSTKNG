@@ -22,7 +22,7 @@ public class IndexModel : PageModel
     public long Succeeded { get; set; }
     public long Failed { get; set; }
 
-    public async void OnGetAsync()
+    public async Task OnGetAsync()
     {
         Series = await _context.Series
                 .Include(s => s.Template)

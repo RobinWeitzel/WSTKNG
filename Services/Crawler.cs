@@ -17,13 +17,15 @@ public class Crawler
   private readonly ILogger _logger;
   public IServiceProvider _serviceProvider;
   public IEmailService _emailService;
+  private readonly IHttpClientFactory _httpClientFactory;
   public string basePath;
 
-  public Crawler(IServiceProvider serviceProvider, IEmailService emailService, ILogger<Crawler> logger)
+  public Crawler(IServiceProvider serviceProvider, IEmailService emailService, ILogger<Crawler> logger, IHttpClientFactory httpClientFactory)
   {
     _serviceProvider = serviceProvider;
     _logger = logger;
     _emailService = emailService;
+    _httpClientFactory = httpClientFactory;
 
     basePath = Path.Combine(Directory.GetCurrentDirectory(), "epubs");
   }
@@ -37,21 +39,23 @@ public class Crawler
 
   private async Task<IHtmlDocument> GetPage(string url, string CookieName, string CookieValue)
   {
-    HttpClientHandler handler = new HttpClientHandler();
+    using var httpClient = _httpClientFactory.CreateClient();
+    
     if (CookieName != null && CookieValue != null && !CookieName.Equals(""))
     {
-      handler.CookieContainer = new CookieContainer();
-      Cookie cookie = new Cookie(CookieName, CookieValue) { Domain = new Uri(url).Host };
-      handler.CookieContainer.Add(cookie);
+      var cookie = new Cookie(CookieName, CookieValue) { Domain = new Uri(url).Host };
+      // Note: For cookie support with HttpClientFactory, consider using a named client with configured handler
+      // For now, we'll use headers for simple cases
+      httpClient.DefaultRequestHeaders.Add("Cookie", $"{CookieName}={CookieValue}");
     }
-    HttpClient httpClient = new HttpClient(handler);
+    
     httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
 
-    HttpResponseMessage request = await httpClient.GetAsync(url);
-    Stream response = await request.Content.ReadAsStreamAsync();
+    using var request = await httpClient.GetAsync(url);
+    using var response = await request.Content.ReadAsStreamAsync();
 
-    HtmlParser parser = new HtmlParser();
-    IHtmlDocument document = parser.ParseDocument(response);
+    var parser = new HtmlParser();
+    var document = parser.ParseDocument(response);
 
     return document;
   }
@@ -66,13 +70,15 @@ public class Crawler
   */
   private async Task<IEnumerable<string>> GetCookies(string url, string formName, string formValue, string CookieName)
   {
-    HttpClient httpClient = new HttpClient();
+    using var httpClient = _httpClientFactory.CreateClient();
 
     httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
 
-    HttpResponseMessage request = await httpClient.PostAsync(url, new FormUrlEncodedContent(new Dictionary<string, string> {
+    using var content = new FormUrlEncodedContent(new Dictionary<string, string> {
       { formName, formValue }
-    }));
+    });
+
+    using var request = await httpClient.PostAsync(url, content);
 
     return request.Headers.GetValues("Set-Cookie");
   }
@@ -437,10 +443,7 @@ public class Crawler
           return;
         }
 
-        using (StreamReader sr = new StreamReader(path))
-        {
-          await _emailService.Send(Path.GetFileName(path), sr.BaseStream);
-        }
+        await _emailService.SendFile(Path.GetFileName(path), path);
 
         foreach (var chapter in context.Chapters.Where(c => chapterIds.Contains(c.ID)))
         {

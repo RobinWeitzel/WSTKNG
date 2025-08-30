@@ -19,7 +19,7 @@ public class SeriesSettingsModel : PageModel
     public List<Template> Templates { get; set; }
     public Series Series { get; set; }
 
-    public async void OnGet(int id)
+    public async Task OnGet(int id)
     {
         var series = await _context.Series
             .Include(s => s.Template)

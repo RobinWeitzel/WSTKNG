@@ -18,7 +18,7 @@ public class TemplateSettingsModel : PageModel
 
     public Template Template { get; set; }
 
-    public async void OnGet(int id)
+    public async Task OnGet(int id)
     {
         var template = await _context.Templates
             .FirstOrDefaultAsync(s => s.ID == id);

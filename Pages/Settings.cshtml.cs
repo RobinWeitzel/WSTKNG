@@ -20,7 +20,7 @@ public class SettingsModel : PageModel
 
     public Setting Setting { get; set; }
 
-    public async void OnGet()
+    public async Task OnGet()
     {
         var setting = await _context.Settings
             .FirstOrDefaultAsync();

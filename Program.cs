@@ -32,6 +32,7 @@ builder.Services.AddHangfireConsoleExtensions();
 
 builder.Services.AddHangfireServer();
 
+builder.Services.AddHttpClient();
 builder.Services.AddTransient<IEmailService, EmailService>();
 
 
