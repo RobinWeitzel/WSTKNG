@@ -131,6 +131,7 @@ public class Crawler
           foreach (TOCResult chapter in chapters)
           {
             string Url = chapter.Url;
+            string title = chapter.Title.Replace("\n", "").Replace("&", "and").Trim();
 
             if (!Url.StartsWith("http") && s.TocUrl.StartsWith("https://www.royalroad.com"))
             {
@@ -143,10 +144,8 @@ public class Crawler
             }
 
             // check whether chapter exists in DB
-            if (!context.Chapters.Where(c => c.URL.Equals(Url) && c.SeriesID == s.ID).Any())
+            if (!context.Chapters.Where(c => (c.URL.Equals(Url) || c.Title.Equals(title)) && c.SeriesID == s.ID).Any())
             {
-              string title = chapter.Title.Replace("\n", "").Replace("&", "and").Trim();
-
               foreach (string specialCharacter in SPECIALCHARACTERS)
               {
                 title = title.Replace(specialCharacter, "");
@@ -197,7 +196,7 @@ public class Crawler
 
         _logger.LogInformation("Crawling chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
 
-        if (chapter.Password != null && chapter.Password != "" && chapter.Series.Template.Name.Equals("Wordpress"))
+        if (!string.IsNullOrEmpty(chapter.Password) && chapter.Series.Template.Name.Equals("Wordpress"))
         {
           string baseUrl = "https://" + new Uri(chapter.Series.TocUrl).Host + "/wp-login.php?action=postpass&wpe-login=true";
           var cookies = await GetCookies(baseUrl, "post_password", chapter.Password, "wp-postpass_");
@@ -234,7 +233,7 @@ public class Crawler
 
         var ps = document.QuerySelectorAll(selector);
 
-        if (ps == null || ps.Count() == 0)
+        if (ps == null || !ps.Any())
         {
           _logger.LogError("Could not find content for chapter \"" + chapter.Title + "\" for series \"" + chapter.Series.Name + "\"");
           return;
@@ -314,7 +313,7 @@ public class Crawler
             .OrderBy(c => c.Published)
             .ToListAsync();
 
-        if (chapters.Count() == 0)
+        if (!chapters.Any())
         {
           _logger.LogError("No chapters to crawl");
           return null;

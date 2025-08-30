@@ -66,4 +66,34 @@ public class SeriesModel : PageModel
         return new JsonResult(new {jobId});
         
     }
+
+    public ActionResult OnPostRange(int id, int startChapter, int endChapter) {
+        var series = _context.Series.Include(s => s.Chapters).Where(s => s.ID == id).FirstOrDefault();
+
+        if(series == null) {
+            return new JsonResult(new {});
+        }
+
+        // Get chapters ordered by their position in the series (oldest to newest)
+        var orderedChapters = series.Chapters
+            .OrderBy(c => c.Published)
+            .ThenBy(c => c.Title)
+            .ToList();
+
+        // Validate chapter range
+        if (startChapter < 1 || endChapter < 1 || startChapter > orderedChapters.Count || endChapter > orderedChapters.Count || startChapter > endChapter) {
+            return new JsonResult(new { error = "Invalid chapter range" });
+        }
+
+        // Get the chapters in the specified range (convert to 0-based indexing)
+        var selectedChapters = orderedChapters
+            .Skip(startChapter - 1)
+            .Take(endChapter - startChapter + 1)
+            .Select(c => c.ID)
+            .ToList();
+
+        string jobId = BackgroundJob.Enqueue<Crawler>(c => c.EmailEpub(selectedChapters, null));
+
+        return new JsonResult(new {jobId});
+    }
 }

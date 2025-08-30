@@ -31,6 +31,14 @@
     <UpToDateCheckBuilt Include="tailwind.config.js" Set="Css" />
   </ItemGroup>
 
+  <ItemGroup>
+    <_ContentIncludedByDefault Remove="WSTKNGTests\bin\Debug\net8.0\WSTKNGTests.deps.json" />
+    <_ContentIncludedByDefault Remove="WSTKNGTests\bin\Debug\net8.0\WSTKNGTests.runtimeconfig.json" />
+    <_ContentIncludedByDefault Remove="WSTKNGTests\obj\Debug\net8.0\WSTKNGTests.sourcelink.json" />
+    <_ContentIncludedByDefault Remove="WSTKNGTests\obj\project.assets.json" />
+    <_ContentIncludedByDefault Remove="WSTKNGTests\obj\WSTKNGTests.csproj.nuget.dgspec.json" />
+  </ItemGroup>
+
   <Target Name="Tailwind" BeforeTargets="Build">
     <Exec Command="npm run css:build" />
   </Target>
