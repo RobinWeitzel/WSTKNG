@@ -243,11 +243,24 @@
         }
 
         const setToOldestUnsent = () => {
-            // Find the first (oldest) chapter that hasn't been sent yet
-            const oldestUnsentChapter = chapters.find(c => !c.Sent);
+            // Starting from the newest chapter, find the oldest unsent chapter in the most recent sequence
+            // This skips old chapters that were intentionally not sent
+            let oldestUnsentInSequence = null;
             
-            if (oldestUnsentChapter) {
-                document.getElementById('startChapter').value = oldestUnsentChapter.Number;
+            // Go through chapters from newest to oldest
+            for (let i = chapters.length - 1; i >= 0; i--) {
+                const chapter = chapters[i];
+                if (!chapter.Sent) {
+                    // Found an unsent chapter, this could be our target
+                    oldestUnsentInSequence = chapter;
+                } else if (oldestUnsentInSequence) {
+                    // Found a sent chapter after finding unsent ones, stop here
+                    break;
+                }
+            }
+            
+            if (oldestUnsentInSequence) {
+                document.getElementById('startChapter').value = oldestUnsentInSequence.Number;
             } else {
                 // All chapters have been sent, set to newest chapter
                 document.getElementById('startChapter').value = chapters.length;
