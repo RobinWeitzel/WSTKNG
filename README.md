@@ -1,4 +1,3 @@
-
 <h1 align="center">
   Web serial to Kindle next generation
   <br>
